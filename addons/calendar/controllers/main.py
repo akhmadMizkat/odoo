@@ -1,4 +1,4 @@
-import simplejson
+import json
 import openerp
 import openerp.http as http
 from openerp.http import request
@@ -48,13 +48,19 @@ class meeting_invitation(http.Controller):
         if attendee:
             attendee_data['current_attendee'] = attendee[0]
 
-        values = dict(init="s.calendar.event('%s', '%s', '%s', '%s' , '%s');" % (db, action, id, 'form', json.dumps(attendee_data)))
+        values = dict(
+            init = """
+                odoo.define('calendar.invitation_page', function (require) {
+                    require('base_calendar.base_calendar').showCalendarInvitation('%s', '%s', '%s', '%s', '%s');
+                });
+            """ % (db, action, id, 'form', json.dumps(attendee_data))
+        )
         return request.render('web.webclient_bootstrap', values)
 
     # Function used, in RPC to check every 5 minutes, if notification to do for an event or not
     @http.route('/calendar/notify', type='json', auth="none")
     def notify(self):
-        registry = openerp.modules.registry.RegistryManager.get(request.session.db)
+        registry = request.registry
         uid = request.session.uid
         context = request.session.context
         with registry.cursor() as cr:
@@ -63,7 +69,7 @@ class meeting_invitation(http.Controller):
 
     @http.route('/calendar/notify_ack', type='json', auth="none")
     def notify_ack(self, type=''):
-        registry = openerp.modules.registry.RegistryManager.get(request.session.db)
+        registry = request.registry
         uid = request.session.uid
         context = request.session.context
         with registry.cursor() as cr:

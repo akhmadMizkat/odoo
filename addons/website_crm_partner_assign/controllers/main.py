@@ -4,10 +4,11 @@ from openerp import SUPERUSER_ID
 from openerp.addons.web import http
 from openerp.addons.web.http import request
 from openerp.addons.website.models.website import slug, unslug
+from openerp.addons.website_partner.controllers.main import WebsitePartnerPage
 from openerp.tools.translate import _
 
 
-class WebsiteCrmPartnerAssign(http.Controller):
+class WebsiteCrmPartnerAssign(WebsitePartnerPage):
     _references_per_page = 40
 
     @http.route([
@@ -29,7 +30,9 @@ class WebsiteCrmPartnerAssign(http.Controller):
         country_obj = request.registry['res.country']
         search = post.get('search', '')
 
-        base_partner_domain = [('is_company', '=', True), ('grade_id.website_published', '=', True), ('website_published', '=', True)]
+        base_partner_domain = [('is_company', '=', True), ('grade_id', '!=', False), ('website_published', '=', True)]
+        if not request.registry['res.users'].has_group(request.cr, request.uid, 'base.group_website_publisher'):
+            base_partner_domain += [('grade_id.website_published', '=', True)]
         if search:
             base_partner_domain += ['|', ('name', 'ilike', search), ('website_description', 'ilike', search)]
 
@@ -95,6 +98,9 @@ class WebsiteCrmPartnerAssign(http.Controller):
         url_args = {}
         if search:
             url_args['search'] = search
+        if country_all:
+            url_args['country_all'] = True
+
         partner_count = partner_obj.search_count(
             request.cr, SUPERUSER_ID, base_partner_domain,
             context=request.context)
@@ -105,11 +111,11 @@ class WebsiteCrmPartnerAssign(http.Controller):
         # search partners matching current search parameters
         partner_ids = partner_obj.search(
             request.cr, SUPERUSER_ID, base_partner_domain,
-            order="grade_id DESC",
+            order="grade_id DESC, display_name ASC",
             context=request.context)  # todo in trunk: order="grade_id DESC, implemented_count DESC", offset=pager['offset'], limit=self._references_per_page
         partners = partner_obj.browse(request.cr, SUPERUSER_ID, partner_ids, request.context)
         # remove me in trunk
-        partners = sorted(partners, key=lambda x: (-1 * (x.grade_id and x.grade_id.id or 0), len(x.implemented_partner_ids)), reverse=True)
+        partners = sorted(partners, key=lambda x: (x.grade_id.sequence if x.grade_id else 0, len([i for i in x.implemented_partner_ids if i.website_published])), reverse=True)
         partners = partners[pager['offset']:pager['offset'] + self._references_per_page]
 
         google_map_partner_ids = ','.join(map(str, [p.id for p in partners]))
@@ -125,11 +131,12 @@ class WebsiteCrmPartnerAssign(http.Controller):
             'searches': post,
             'search_path': "%s" % werkzeug.url_encode(post),
         }
-        return request.website.render("website_crm_partner_assign.index", values)
+        return request.render("website_crm_partner_assign.index", values, status=partners and 200 or 404)
+
 
     # Do not use semantic controller due to SUPERUSER_ID
     @http.route(['/partners/<partner_id>'], type='http', auth="public", website=True)
-    def partners_detail(self, partner_id, partner_name='', **post):
+    def partners_detail(self, partner_id, **post):
         _, partner_id = unslug(partner_id)
         current_grade, current_country = None, None
         grade_id = post.get('grade_id')
@@ -144,7 +151,8 @@ class WebsiteCrmPartnerAssign(http.Controller):
                 current_country = request.registry['res.country'].browse(request.cr, request.uid, country_ids[0], context=request.context)
         if partner_id:
             partner = request.registry['res.partner'].browse(request.cr, SUPERUSER_ID, partner_id, context=request.context)
-            if partner.exists() and partner.website_published:
+            is_website_publisher = request.registry['res.users'].has_group(request.cr, request.uid, 'base.group_website_publisher')
+            if partner.exists() and (partner.website_published or is_website_publisher):
                 values = {
                     'main_object': partner,
                     'partner': partner,

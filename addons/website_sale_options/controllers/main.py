@@ -3,9 +3,9 @@
 from openerp import SUPERUSER_ID
 from openerp.addons.web import http
 from openerp.addons.web.http import request
-from openerp.addons.website_sale.controllers.main import website_sale
+from openerp.addons.website_sale.controllers.main import WebsiteSale
 
-class website_sale_options(website_sale):
+class website_sale_options(WebsiteSale):
 
     @http.route(['/shop/product/<model("product.template"):product>'], type='http', auth="public", website=True)
     def product(self, product, category='', search='', **kwargs):
@@ -22,9 +22,12 @@ class website_sale_options(website_sale):
         r.qcontext['optional_product_ids'] = optional_product_ids
         return r
 
-    @http.route(['/shop/cart/update_option'], type='http', auth="public", methods=['POST'], website=True)
-    def cart_options_update_json(self, product_id, add_qty=1, set_qty=0, goto_shop=None, **kw):
+    @http.route(['/shop/cart/update_option'], type='http', auth="public", methods=['POST'], website=True, multilang=False)
+    def cart_options_update_json(self, product_id, add_qty=1, set_qty=0, goto_shop=None, lang=None, **kw):
         cr, uid, context, pool = request.cr, request.uid, request.context, request.registry
+        if lang:
+            context = dict(context, lang=lang)
+            request.website = request.website.with_context(context)
 
         order = request.website.sale_get_order(force_create=1)
         product = pool['product.product'].browse(cr, uid, int(product_id), context=context)
@@ -53,15 +56,17 @@ class website_sale_options(website_sale):
     @http.route(['/shop/modal'], type='json', auth="public", methods=['POST'], website=True)
     def modal(self, product_id, **kw):
         cr, uid, context, pool = request.cr, request.uid, request.context, request.registry
-        pricelist = self.get_pricelist()
+        pricelist = request.website.get_current_pricelist()
         if not context.get('pricelist'):
             context['pricelist'] = int(pricelist)
 
-        from_currency = pool.get('product.price.type')._get_field_currency(cr, uid, 'list_price', context)
+        website_context = kw.get('kwargs', {}).get('context', {})
+        context = dict(context or {}, **website_context)
+        from_currency = pool['res.users'].browse(cr, uid, uid, context=context).company_id.currency_id
         to_currency = pricelist.currency_id
         compute_currency = lambda price: pool['res.currency']._compute(cr, uid, from_currency, to_currency, price, context=context)
-
         product = pool['product.product'].browse(cr, uid, int(product_id), context=context)
+        request.website = request.website.with_context(context)
 
         return request.website._render("website_sale_options.modal", {
                 'product': product,
