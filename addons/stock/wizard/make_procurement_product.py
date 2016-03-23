@@ -20,7 +20,8 @@
 ##############################################################################
 
 
-from openerp.osv import fields, osv
+from openerp.osv import fields, osv, orm
+from openerp.tools.translate import _
 
 class make_procurement(osv.osv_memory):
     _name = 'make.procurement'
@@ -73,6 +74,7 @@ class make_procurement(osv.osv_memory):
                 'product_id': proc.product_id.id,
                 'product_qty': proc.qty,
                 'product_uom': proc.uom_id.id,
+                'warehouse_id': proc.warehouse_id.id,
                 'location_id': wh.lot_stock_id.id,
                 'company_id': wh.company_id.id,
             })
@@ -107,6 +109,13 @@ class make_procurement(osv.osv_memory):
         if context is None:
             context = {}
         record_id = context.get('active_id')
+
+        if context.get('active_model') == 'product.template':
+            product_ids = self.pool.get('product.product').search(cr, uid, [('product_tmpl_id', '=', context.get('active_id'))], context=context)
+            if len(product_ids) == 1:
+                record_id = product_ids[0]
+            else:
+                raise orm.except_orm(_('Warning'), _('Please use the Product Variant vue to request a procurement.'))
 
         res = super(make_procurement, self).default_get(cr, uid, fields, context=context)
 

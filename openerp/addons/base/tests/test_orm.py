@@ -3,7 +3,6 @@ from openerp.tools import mute_logger
 from openerp.tests import common
 
 UID = common.ADMIN_USER_ID
-DB = common.DB
 
 
 class TestORM(common.TransactionCase):
@@ -111,6 +110,18 @@ class TestORM(common.TransactionCase):
         found = self.partner.search_read(self.cr, UID, [['name', '=', 'Does not exists']], ['name'])
         self.assertEqual(len(found), 0)
 
+    def test_exists(self):
+        partner = self.partner.browse(self.cr, UID, [])
+
+        # check that records obtained from search exist
+        recs = partner.search([])
+        self.assertTrue(recs)
+        self.assertEqual(recs.exists(), recs)
+
+        # check that there is no record with id 0
+        recs = partner.browse([0])
+        self.assertFalse(recs.exists())
+
     def test_groupby_date(self):
         partners = dict(
             A='2012-11-19',
@@ -155,6 +166,10 @@ class TestORM(common.TransactionCase):
                         ['date'], ['date:month', 'date:day'], lazy=False)
         self.assertEqual(len(rg), len(all_partners))
 
+    def test_write_duplicate(self):
+        cr, uid, p1 = self.cr, self.uid, self.p1
+        self.partner.write(cr, uid, [p1, p1], {'name': 'X'})
+
 
 class TestInherits(common.TransactionCase):
     """ test the behavior of the orm for models that use _inherits;
@@ -165,6 +180,12 @@ class TestInherits(common.TransactionCase):
         super(TestInherits, self).setUp()
         self.partner = self.registry('res.partner')
         self.user = self.registry('res.users')
+
+    def test_default(self):
+        """ `default_get` cannot return a dictionary or a new id """
+        defaults = self.user.default_get(self.cr, UID, ['partner_id'])
+        if 'partner_id' in defaults:
+            self.assertIsInstance(defaults['partner_id'], (bool, int, long))
 
     def test_create(self):
         """ creating a user should automatically create a new partner """
@@ -202,17 +223,27 @@ class TestInherits(common.TransactionCase):
     @mute_logger('openerp.models')
     def test_copy(self):
         """ copying a user should automatically copy its partner, too """
-        foo_id = self.user.create(self.cr, UID, {'name': 'Foo', 'login': 'foo', 'password': 'foo'})
+        foo_id = self.user.create(self.cr, UID, {
+            'name': 'Foo',
+            'login': 'foo',
+            'password': 'foo',
+            'supplier': True,
+        })
         foo_before, = self.user.read(self.cr, UID, [foo_id])
         del foo_before['__last_update']
-        bar_id = self.user.copy(self.cr, UID, foo_id, {'login': 'bar', 'password': 'bar'})
+        bar_id = self.user.copy(self.cr, UID, foo_id, {
+            'login': 'bar',
+            'password': 'bar',
+        })
         foo_after, = self.user.read(self.cr, UID, [foo_id])
         del foo_after['__last_update']
 
         self.assertEqual(foo_before, foo_after)
 
         foo, bar = self.user.browse(self.cr, UID, [foo_id, bar_id])
+        self.assertEqual(bar.name, 'Foo (copy)')
         self.assertEqual(bar.login, 'bar')
+        self.assertEqual(foo.supplier, bar.supplier)
         self.assertNotEqual(foo.id, bar.id)
         self.assertNotEqual(foo.partner_id.id, bar.partner_id.id)
 
@@ -220,7 +251,7 @@ class TestInherits(common.TransactionCase):
     def test_copy_with_ancestor(self):
         """ copying a user with 'parent_id' in defaults should not duplicate the partner """
         foo_id = self.user.create(self.cr, UID, {'name': 'Foo', 'login': 'foo', 'password': 'foo',
-                                                 'login_date': '2016-01-01'})
+                                                 'login_date': '2016-01-01', 'signature': 'XXX'})
         par_id = self.partner.create(self.cr, UID, {'name': 'Bar'})
 
         foo_before, = self.user.read(self.cr, UID, [foo_id])
@@ -238,8 +269,9 @@ class TestInherits(common.TransactionCase):
         self.assertNotEqual(foo.id, bar.id)
         self.assertEqual(bar.partner_id.id, par_id)
         self.assertEqual(bar.login, 'bar', "login is given from copy parameters")
-        self.assertEqual(bar.login_date, foo.login_date, "login_date copied from original record")
+        self.assertFalse(bar.login_date, "login_date should not be copied from original record")
         self.assertEqual(bar.name, 'Bar', "name is given from specific partner")
+        self.assertEqual(bar.signature, foo.signature, "signature should be copied")
 
 
 

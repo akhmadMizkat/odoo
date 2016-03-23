@@ -30,7 +30,7 @@ _logger = logging.getLogger(__name__)
 
 # welcome email sent to portal users
 # (note that calling '_' has no effect except exporting those strings for translation)
-WELCOME_EMAIL_SUBJECT = _("Your OpenERP account at %(company)s")
+WELCOME_EMAIL_SUBJECT = _("Your Odoo account at %(company)s")
 WELCOME_EMAIL_BODY = _("""Dear %(name)s,
 
 You have been given access to %(company)s's %(portal)s.
@@ -46,7 +46,7 @@ You can set or change your password via the following url:
 %(welcome_message)s
 
 --
-OpenERP - Open Source Business Applications
+Odoo - Open Source Business Applications
 http://www.openerp.com
 """)
 
@@ -175,8 +175,8 @@ class wizard_user(osv.osv_memory):
                     user.write({'active': True, 'groups_id': [(4, portal.id)]})
                     # prepare for the signup process
                     user.partner_id.signup_prepare()
+                    self._send_email(cr, uid, wizard_user, context)
                 wizard_user.refresh()
-                self._send_email(cr, uid, wizard_user, context)
             else:
                 # remove the user (if it exists) from the portal group
                 if user and (portal in user.groups_id):

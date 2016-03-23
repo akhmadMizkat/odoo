@@ -19,6 +19,7 @@
 #
 ##############################################################################
 
+from openerp import SUPERUSER_ID
 from openerp.osv import fields, osv
 from openerp.tools.translate import _
 
@@ -27,7 +28,6 @@ class procurement_order(osv.osv):
     _inherit = "procurement.order"
     _columns = {
         'task_id': fields.many2one('project.task', 'Task', copy=False),
-        'sale_line_id': fields.many2one('sale.order.line', 'Sales order line', copy=False)
     }
 
     def _is_procurement_task(self, cr, uid, procurement, context=None):
@@ -81,7 +81,7 @@ class procurement_order(osv.osv):
             'date_deadline': procurement.date_planned,
             'planned_hours': planned_hours,
             'remaining_hours': planned_hours,
-            'partner_id': procurement.sale_line_id and procurement.sale_line_id.order_id.partner_id.id or False,
+            'partner_id': procurement.sale_line_id and procurement.sale_line_id.order_id.partner_id.id or procurement.partner_dest_id.id,
             'user_id': procurement.product_id.product_manager.id,
             'procurement_id': procurement.id,
             'description': procurement.name + '\n',
@@ -128,7 +128,7 @@ class project_task(osv.osv):
         proc_obj = self.pool.get("procurement.order")
         for task in self.browse(cr, uid, ids, context=context):
             if task.procurement_id:
-                proc_obj.check(cr, uid, [task.procurement_id.id], context=context)
+                proc_obj.check(cr, SUPERUSER_ID, [task.procurement_id.id], context=context)
 
     def write(self, cr, uid, ids, values, context=None):
         """ When closing tasks, validate subflows. """
@@ -139,23 +139,22 @@ class project_task(osv.osv):
                 self._validate_subflows(cr, uid, ids, context=context)
         return res
 
-class product_product(osv.osv):
+class product_template(osv.osv):
     _inherit = "product.template"
     _columns = {
         'project_id': fields.many2one('project.project', 'Project', ondelete='set null',),
-        'auto_create_task': fields.boolean('Create Task Automatically', help="Thick this option if you want to create a task automatically each time this product is sold"),
+        'auto_create_task': fields.boolean('Create Task Automatically', help="Tick this option if you want to create a task automatically each time this product is sold"),
     }
 
-
-class sale_order_line(osv.osv):
-    _inherit = 'sale.order.line'
-
+class product_product(osv.osv):
+    _inherit = "product.product"
+    
     def need_procurement(self, cr, uid, ids, context=None):
-        #when sale is installed alone, there is no need to create procurements, but with sale_service
-        #we must create a procurement for each service that has the auto_create_task boolean set to True.
-        for line in self.browse(cr, uid, ids, context=context):
-            if line.product_id and line.product_id.type == 'service' and line.product_id.auto_create_task:
+        for product in self.browse(cr, uid, ids, context=context):
+            if product.type == 'service' and product.auto_create_task:
                 return True
-        return super(sale_order_line, self).need_procurement(cr, uid, ids, context=context)
+        return super(product_product, self).need_procurement(cr, uid, ids, context=context)
+
+
 
 

@@ -41,7 +41,7 @@ class invite_wizard(osv.osv_memory):
             model_name = ir_model.name_get(cr, uid, model_ids, context=context)[0][1]
 
             document_name = self.pool[model].name_get(cr, uid, [res_id], context=context)[0][1]
-            message = _('<div><p>Hello,</p><p>%s invited you to follow %s document: %s.<p></div>') % (user_name, model_name, document_name)
+            message = _('<div><p>Hello,</p><p>%s invited you to follow %s document: %s.</p></div>') % (user_name, model_name, document_name)
             result['message'] = message
         elif 'message' in fields:
             result['message'] = _('<div><p>Hello,</p><p>%s invited you to follow a new document.</p></div>') % user_name
@@ -60,9 +60,9 @@ class invite_wizard(osv.osv_memory):
             help="If checked, the partners will receive an email warning they have been "
                     "added in the document's followers."),
     }
-    
+
     _defaults = {
-        'send_mail' : True,
+        'send_mail': True,
     }
 
     def add_followers(self, cr, uid, ids, context=None):
@@ -91,10 +91,14 @@ class invite_wizard(osv.osv_memory):
                 mail_id = mail_mail.create(cr, uid, {
                     'model': wizard.res_model,
                     'res_id': wizard.res_id,
+                    'record_name': document.name_get()[0][1],
+                    'email_from': self.pool['mail.message']._get_default_from(cr, uid, context=context),
+                    'reply_to': self.pool['mail.message']._get_default_from(cr, uid, context=context),
                     'subject': _('Invitation to follow %s: %s') % (model_name, document.name_get()[0][1]),
                     'body_html': '%s' % wizard.message,
                     'auto_delete': True,
+                    'message_id': self.pool['mail.message']._get_message_id(cr, uid, {'no_auto_thread': True}, context=context),
                     'recipient_ids': [(4, id) for id in new_follower_ids]
-                    }, context=context)
+                }, context=context)
                 mail_mail.send(cr, uid, [mail_id], context=context)
         return {'type': 'ir.actions.act_window_close'}

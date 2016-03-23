@@ -43,8 +43,9 @@
   border: 0;
 }
 #oe_snippets .tab-content {
+  margin-right: 120px;
   display: inline-block;
-  white-space: nowrap;
+  white-space: normal;
   background: black;
 }
 #oe_snippets .tab-content > div {
@@ -71,7 +72,7 @@
 }
 
 .oe_snippet {
-  float: left;
+  display: inline-block;
   vertical-align: top;
   width: 93px;
   margin-left: 1px;
@@ -104,10 +105,6 @@
 }
 .oe_snippet .oe_snippet_thumbnail .oe_snippet_thumbnail_img {
   height: 74px;
-  -webkit-transition: all 150ms linear;
-  -moz-transition: all 150ms linear;
-  -o-transition: all 150ms linear;
-  transition: all 150ms linear;
   -webkit-box-shadow: inset 0px 0px 0px 3px #333333;
   -moz-box-shadow: inset 0px 0px 0px 3px #333333;
   box-shadow: inset 0px 0px 0px 3px #333333;
@@ -377,6 +374,13 @@
 }
 .oe_overlay .oe_overlay_options > .btn-group {
   left: -50%;
+  white-space: nowrap;
+}
+.oe_overlay .oe_overlay_options > .btn-group > a {
+  cursor: pointer;
+  display: inline-block;
+  float: none;
+  margin: 0 -3px;
 }
 .oe_overlay .oe_overlay_options .btn, .oe_overlay .oe_overlay_options a {
   cursor: pointer;

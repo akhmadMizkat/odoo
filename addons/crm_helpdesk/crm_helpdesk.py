@@ -56,7 +56,7 @@ class crm_helpdesk(osv.osv):
             'date': fields.datetime('Date'),
             'ref': fields.reference('Reference', selection=openerp.addons.base.res.res_request.referencable_models),
             'ref2': fields.reference('Reference 2', selection=openerp.addons.base.res.res_request.referencable_models),
-            'channel_id': fields.many2one('crm.case.channel', 'Channel', help="Communication channel."),
+            'channel_id': fields.many2one('crm.tracking.medium', 'Channel', help="Communication channel."),
             'planned_revenue': fields.float('Planned Revenue'),
             'planned_cost': fields.float('Planned Costs'),
             'priority': fields.selection([('0','Low'), ('1','Normal'), ('2','High')], 'Priority'),
@@ -100,7 +100,7 @@ class crm_helpdesk(osv.osv):
         if values.get('state'):
             if values.get('state') in ['draft', 'open'] and not values.get('date_open'):
                 values['date_open'] = fields.datetime.now()
-            elif values.get('state') == 'close' and not values.get('date_closed'):
+            elif values.get('state') == 'done' and not values.get('date_closed'):
                 values['date_closed'] = fields.datetime.now()
         return super(crm_helpdesk, self).write(cr, uid, ids, values, context=context)
 

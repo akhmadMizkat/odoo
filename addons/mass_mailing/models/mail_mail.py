@@ -19,9 +19,11 @@
 #
 ##############################################################################
 
-import urllib
 import urlparse
+import werkzeug.urls
+import re
 
+from openerp.tools.translate import _
 from openerp import tools
 from openerp import SUPERUSER_ID
 from openerp.osv import osv, fields
@@ -45,7 +47,7 @@ class MailMail(osv.Model):
         # TDE note: should be after 'all values computed', to have values (FIXME after merging other branch holding create refactoring)
         mail_id = super(MailMail, self).create(cr, uid, values, context=context)
         if values.get('statistics_ids'):
-            mail = self.browse(cr, SUPERUSER_ID, mail_id)
+            mail = self.browse(cr, SUPERUSER_ID, mail_id, context=context)
             for stat in mail.statistics_ids:
                 self.pool['mail.mail.statistics'].write(cr, uid, [stat.id], {'message_id': mail.message_id}, context=context)
         return mail_id
@@ -55,7 +57,7 @@ class MailMail(osv.Model):
         track_url = urlparse.urljoin(
             base_url, 'mail/track/%(mail_id)s/blank.gif?%(params)s' % {
                 'mail_id': mail.id,
-                'params': urllib.urlencode({'db': cr.dbname})
+                'params': werkzeug.url_encode({'db': cr.dbname})
             }
         )
         return '<img src="%s" alt=""/>' % track_url
@@ -65,14 +67,27 @@ class MailMail(osv.Model):
         url = urlparse.urljoin(
             base_url, 'mail/mailing/%(mailing_id)s/unsubscribe?%(params)s' % {
                 'mailing_id': mail.mailing_id.id,
-                'params': urllib.urlencode({'db': cr.dbname, 'res_id': mail.res_id, 'email': email_to})
+                'params': werkzeug.url_encode({'db': cr.dbname, 'res_id': mail.res_id, 'email': email_to})
             }
         )
-        return '<small><a href="%s">%s</a></small>' % (url, msg or 'Click to unsubscribe')
+        return '<small><a href="%s">%s</a></small>' % (url, msg or _('Click to unsubscribe'))
 
     def send_get_mail_body(self, cr, uid, mail, partner=None, context=None):
         """ Override to add the tracking URL to the body. """
         body = super(MailMail, self).send_get_mail_body(cr, uid, mail, partner=partner, context=context)
+
+        # prepend <base> tag for images using absolute urls
+        domain = self.pool.get("ir.config_parameter").get_param(cr, uid, "web.base.url", context=context)
+        base = "<base href='%s'>" % domain
+        body = tools.append_content_to_html(base, body, plaintext=False, container_tag='div')
+
+        # resolve relative image url to absolute for outlook.com
+        def _sub_relative2absolute(match):
+            return match.group(1) + urlparse.urljoin(domain, match.group(2))
+        # Regex: https://regex101.com/r/aE8uG5/3
+        body = re.sub('(<img(?=\s)[^>]*\ssrc=["\'])(/[^/][^"\']+)', _sub_relative2absolute, body)
+        # Regex: https://regex101.com/r/kT3lD5/2
+        body = re.sub(r'(<[^>]+\bstyle=["\'][^"\']+\burl\([\'"]?)(/[^/\'"][^\'")]+)', _sub_relative2absolute, body)
 
         # generate tracking URL
         if mail.statistics_ids:
